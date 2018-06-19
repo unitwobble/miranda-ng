@@ -122,7 +122,7 @@ private:
 
 	static int lua__new(lua_State *L)
 	{
-		T **udata = (T**)lua_newuserdata(L, sizeof(T*));
+		T **udata = (T**)lua_newuserdatauv(L, sizeof(T*), 1);
 		
 		*udata = Init(L);
 		if (*udata == nullptr) {
@@ -320,7 +320,7 @@ public:
 			return;
 		}
 
-		T **udata = (T**)lua_newuserdata(L, sizeof(T));
+		T **udata = (T**)lua_newuserdatauv(L, sizeof(T), 1);
 		*udata = obj;
 		luaL_setmetatable(L, Name);
 	}

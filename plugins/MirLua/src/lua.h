@@ -2,7 +2,7 @@
 
 class CMLua
 {
-	friend class CMPlugin;
+	friend struct CMPlugin;
 
 private:
 	lua_State *L;

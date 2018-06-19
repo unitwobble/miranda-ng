@@ -129,11 +129,11 @@ void CMLuaEnvironment::CreateEnvironmentTable()
 	lua_pushlightuserdata(L, this);
 	lua_rawseti(L, -2, NULL);
 	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "_G");
+	lua_setfield(L, -2, LUA_GNAME);
 	lua_createtable(L, 0, 2);
 	lua_pushliteral(L, MT_ENVIRONMENT);
 	lua_setfield(L, -2, "__metatable");
-	lua_getglobal(L, "_G");
+	lua_getglobal(L, LUA_GNAME);
 	lua_setfield(L, -2, "__index");
 	lua_setmetatable(L, -2);
 }

@@ -206,7 +206,7 @@ static const luaL_Reg contentApi[] =
 static NETLIBHTTPREQUEST* response_Create(lua_State *L, NETLIBHTTPREQUEST *request)
 {
 	NETLIBHTTPREQUEST *response = Netlib_HttpTransaction(g_hNetlib, request);
-	NETLIBHTTPREQUEST **udata = (NETLIBHTTPREQUEST**)lua_newuserdata(L, sizeof(NETLIBHTTPREQUEST*));
+	NETLIBHTTPREQUEST **udata = (NETLIBHTTPREQUEST**)lua_newuserdatauv(L, sizeof(NETLIBHTTPREQUEST*), 1);
 	*udata = response;
 	luaL_setmetatable(L, MT_NETLIBHTTPRESPONSE);
 	return response;
@@ -228,13 +228,13 @@ static int response__index(lua_State *L)
 	if (mir_strcmpi(key, "StatusCode") == 0)
 		lua_pushinteger(L, response->resultCode);
 	else if (mir_strcmpi(key, "Headers") == 0) {
-		NETLIBHTTPHEADERS *headers = (NETLIBHTTPHEADERS*)lua_newuserdata(L, sizeof(NETLIBHTTPHEADERS));
+		NETLIBHTTPHEADERS *headers = (NETLIBHTTPHEADERS*)lua_newuserdatauv(L, sizeof(NETLIBHTTPHEADERS), 1);
 		headers->headers = response->headers;
 		headers->count = response->headersCount;
 		luaL_setmetatable(L, MT_NETLIBHTTPHEADERS);
 	}
 	else if (mir_strcmpi(key, "Content") == 0) {
-		NETLIBHTTPCONTENT *content = (NETLIBHTTPCONTENT*)lua_newuserdata(L, sizeof(NETLIBHTTPCONTENT));
+		NETLIBHTTPCONTENT *content = (NETLIBHTTPCONTENT*)lua_newuserdatauv(L, sizeof(NETLIBHTTPCONTENT), 1);
 		content->data = response->pData;
 		content->length = response->dataLength;
 		luaL_setmetatable(L, MT_NETLIBHTTPCONTENT);
@@ -431,7 +431,7 @@ static int request_Send(lua_State *L)
 
 static int request__index(lua_State *L)
 {
-	NETLIBHTTPREQUEST *request = *(NETLIBHTTPREQUEST**)luaL_checkudata(L, 1, MT_NETLIBHTTPREQUEST);
+	luaL_checkudata(L, 1, MT_NETLIBHTTPREQUEST);
 	const char *key = lua_tostring(L, 2);
 
 	if (mir_strcmpi(key, "Method") == 0)
@@ -474,7 +474,7 @@ static const luaL_Reg requestApi[] =
 static int http_Request(lua_State *L)
 {
 	NETLIBHTTPREQUEST *request = CreateRequest();
-	NETLIBHTTPREQUEST **udata = (NETLIBHTTPREQUEST**)lua_newuserdata(L, sizeof(NETLIBHTTPREQUEST*));
+	NETLIBHTTPREQUEST **udata = (NETLIBHTTPREQUEST**)lua_newuserdatauv(L, sizeof(NETLIBHTTPREQUEST*), 1);
 	*udata = request;
 	request->requestType = (1 << (luaL_checkoption(L, 1, nullptr, httpMethods)));
 	SetUrl(request, luaL_checkstring(L, 2));

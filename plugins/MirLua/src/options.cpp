@@ -17,14 +17,13 @@ CMLuaOptions::CMLuaOptions()
 
 static int ScriptStatusToIcon(ScriptStatus status)
 {
-	switch (status)
-	{
-	case ScriptStatus::None:
-		return -1;
+	switch (status) {
 	case ScriptStatus::Loaded:
 		return 0;
 	case ScriptStatus::Failed:
 		return 1;
+	default:
+		return -1;
 	}
 }
 

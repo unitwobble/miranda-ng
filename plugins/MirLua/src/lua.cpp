@@ -28,7 +28,7 @@ lua_State* CMLua::GetState()
 
 void CMLua::Load()
 {
-	Log("Loading lua engine");
+	Log("Loading %s", LUA_VERSION);
 	L = luaL_newstate();
 	Log("Loading standard modules");
 	luaL_openlibs(L);

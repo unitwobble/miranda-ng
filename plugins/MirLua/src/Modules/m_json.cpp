@@ -23,7 +23,7 @@ static void json2lua(lua_State *L, const JSONNode &node)
 		break;
 	case JSON_ARRAY:
 	case JSON_NODE:
-		JSONNode * *udata = (JSONNode**)lua_newuserdata(L, sizeof(JSONNode*));
+		JSONNode * *udata = (JSONNode**)lua_newuserdatauv(L, sizeof(JSONNode*), 1);
 		*udata = json_copy(&node);
 		luaL_setmetatable(L, MT_JSON);
 	}
@@ -168,7 +168,7 @@ static int json__pairsIterator(lua_State *L)
 
 static int json__pairs(lua_State *L)
 {
-	JSONNode *node = *(JSONNode**)luaL_checkudata(L, 1, MT_JSON);
+	luaL_checkudata(L, 1, MT_JSON);
 
 	lua_pushinteger(L, 0);
 	lua_pushcclosure(L, json__pairsIterator, 1);
@@ -220,7 +220,7 @@ static int lua_Decode(lua_State *L)
 {
 	const char *string = luaL_checkstring(L, 1);
 
-	JSONNode **udata = (JSONNode**)lua_newuserdata(L, sizeof(JSONNode*));
+	JSONNode **udata = (JSONNode**)lua_newuserdatauv(L, sizeof(JSONNode*), 1);
 	*udata = json_parse(string);
 	luaL_setmetatable(L, MT_JSON);
 
