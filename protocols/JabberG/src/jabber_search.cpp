@@ -67,9 +67,10 @@ static int JabberSearchFrameProc(HWND hwnd, int msg, WPARAM wParam, LPARAM lPara
 				dat->curPos = pos;
 			}
 		}
-		if (HIWORD(wParam) == EN_SETFOCUS) { //Transmit focus set notification to parent window
+
+		// Transmit focus set notification to parent window
+		if (HIWORD(wParam) == EN_SETFOCUS)
 			PostMessage(GetParent(hwndDlg), WM_COMMAND, MAKEWPARAM(0, EN_SETFOCUS), (LPARAM)hwndDlg);
-		}
 	}
 
 	if (msg == WM_PAINT) {
@@ -115,8 +116,9 @@ static int JabberSearchAddField(HWND hwndDlg, Data* FieldDat)
 		EnableWindow(hwndLabel, !FieldDat->bReadOnly);
 		SendMessage(hwndVar, EM_SETREADONLY, (WPARAM)FieldDat->bReadOnly, 0);
 	}
-	//remade list
-	//reallocation
+	
+	// remade list
+	// reallocation
 	JabberSearchData *dat = (JabberSearchData *)GetWindowLongPtr(hwndDlg, GWLP_USERDATA);
 	if (dat) {
 		dat->pJSInf = (JabberSearchFieldsInfo*)realloc(dat->pJSInf, sizeof(JabberSearchFieldsInfo)*(dat->nJSInfCount + 1));
@@ -197,31 +199,35 @@ void CJabberProto::OnIqResultGetSearchFields(const TiXmlElement *iqNode, CJabber
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //  Return results to search dialog
-//  The	pmFields is the pointer to map of <field Name, field Label> Not unical but ordered
+//  The pmFields is the pointer to map of <field Name, field Label> Not unical but ordered
 //	This can help to made result parser routines more simple
 
-static wchar_t *nickfields[] = { L"nick", L"nickname", L"fullname", L"name", L"given", L"first", L"jid", nullptr };
+static char *nickfields[] = { "nick", "nickname", "fullname", "name", "given", "first", "jid", nullptr };
 
-void CJabberProto::SearchReturnResults(HANDLE  id, void * pvUsersInfo, U_TCHAR_MAP * pmAllFields)
+static int TCharKeyCmp(const char *p1, const char *p2)
 {
-	LIST<wchar_t> ListOfNonEmptyFields(20, (LIST<wchar_t>::FTSortFunc)TCharKeyCmp);
-	LIST<wchar_t> ListOfFields(20);
-	LIST<U_TCHAR_MAP> *plUsersInfo = (LIST<U_TCHAR_MAP>*)pvUsersInfo;
+	return mir_strcmpi(p1, p2);
+}
+
+static void SearchReturnResults(CJabberProto *ppro, HANDLE id, LIST<UNIQUE_MAP> &plUsersInfo, UNIQUE_MAP &pmAllFields)
+{
+	LIST<char> ListOfNonEmptyFields(20, TCharKeyCmp);
+	LIST<char> ListOfFields(20);
 
 	// lets fill the ListOfNonEmptyFields but in users order
-	for (auto &pmUserData : *plUsersInfo) {
+	for (auto &pmUserData : plUsersInfo) {
 		int nUserFields = pmUserData->getCount();
 		for (int j = 0; j < nUserFields; j++) {
-			wchar_t *var = pmUserData->getKeyName(j);
+			char *var = pmUserData->getKeyName(j);
 			if (var && ListOfNonEmptyFields.getIndex(var) < 0)
 				ListOfNonEmptyFields.insert(var);
 		}
 	}
 
 	// now fill the ListOfFields but order is from pmAllFields
-	int nAllCount = pmAllFields->getCount();
+	int nAllCount = pmAllFields.getCount();
 	for (int i = 0; i < nAllCount; i++) {
-		wchar_t *var = pmAllFields->getUnOrderedKeyName(i);
+		char *var = pmAllFields.getUnOrderedKeyName(i);
 		if (var && ListOfNonEmptyFields.getIndex(var) < 0)
 			continue;
 		ListOfFields.insert(var);
@@ -235,59 +241,53 @@ void CJabberProto::SearchReturnResults(HANDLE  id, void * pvUsersInfo, U_TCHAR_M
 	Results.pszFields = (wchar_t**)mir_alloc(sizeof(wchar_t*)*nFieldCount);
 	Results.nFieldCount = nFieldCount;
 
-	/* Sending Columns Titles */
+	// Sending Columns Titles
 	for (int i = 0; i < nFieldCount; i++) {
-		wchar_t *var = ListOfFields[i];
+		char *var = ListOfFields[i];
 		if (var)
-			Results.pszFields[i] = pmAllFields->operator [](var);
+			Results.pszFields[i] = mir_utf8decodeW(pmAllFields[var]);
 	}
 
 	Results.psr.cbSize = 0; // sending column names
-	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SEARCHRESULT, id, (LPARAM)&Results);
+	ppro->ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SEARCHRESULT, id, (LPARAM)&Results);
+	for (int i = 0; i < nFieldCount; i++)
+		replaceStrW(Results.pszFields[i], nullptr);
 
-	/* Sending Users Data */
-	Results.psr.cbSize = sizeof(Results.psr); // sending user data
+	// Sending Users Data
+	Results.psr.cbSize = sizeof(Results.psr);
 
-	for (auto &pmUserData : *plUsersInfo) {
-		wchar_t buff[200];
-		buff[0] = 0;
+	for (auto &pmUserData : plUsersInfo) {
 		for (int j = 0; j < nFieldCount; j++) {
-			wchar_t *var = ListOfFields[j];
-			wchar_t *value = pmUserData->operator [](var);
-			Results.pszFields[j] = value ? value : (wchar_t *)L" ";
-			if (!mir_wstrcmpi(var, L"jid") && value)
-				Results.psr.id.w = value;
+			char *var = ListOfFields[j];
+			char *value = pmUserData->operator [](var);
+			Results.pszFields[j] = value ? mir_utf8decodeW(value) : mir_wstrdup(L" ");
+			if (!mir_strcmpi(var, "jid") && value)
+				Results.psr.id.w = Results.pszFields[j];
 		}
 
-		wchar_t *nick = nullptr;
+		const char *nick = nullptr;
 		for (int k = 0; k < _countof(nickfields) && !nick; k++)
 			nick = pmUserData->operator [](nickfields[k]);
 
 		if (nick) {
-			if (mir_wstrcmpi(nick, Results.psr.id.w))
-				mir_snwprintf(buff, L"%s (%s)", nick, Results.psr.id.w);
+			Utf2T wszNick(nick);
+			wchar_t buff[200];
+			if (mir_wstrcmpi(wszNick, Results.psr.id.w))
+				mir_snwprintf(buff, L"%s (%s)", wszNick, Results.psr.id.w);
 			else
-				wcsncpy_s(buff, nick, _TRUNCATE);
+				wcsncpy_s(buff, wszNick, _TRUNCATE);
 
-			nick = buff;
+			Results.psr.nick.w = buff;
 		}
-		Results.psr.nick.w = nick;
+		else Results.psr.nick.w = L"";
 		Results.psr.flags = PSR_UNICODE;
 
-		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SEARCHRESULT, id, (LPARAM)&Results);
-		Results.psr.nick.w = nullptr;
+		ppro->ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SEARCHRESULT, id, (LPARAM)&Results);
+		for (int i = 0; i < nFieldCount; i++)
+			replaceStrW(Results.pszFields[i], nullptr);
 	}
+	
 	mir_free(Results.pszFields);
-}
-
-void DestroyKey(wchar_t* key)
-{
-	mir_free(key);
-}
-
-wchar_t* CopyKey(wchar_t* key)
-{
-	return mir_wstrdup(key);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -298,8 +298,8 @@ void CJabberProto::OnIqResultAdvancedSearch(const TiXmlElement *iqNode, CJabberI
 	const char *type;
 	int id;
 
-	U_TCHAR_MAP mColumnsNames(10);
-	LIST<void> SearchResults(2);
+	UNIQUE_MAP mColumnsNames(10);
+	LIST<UNIQUE_MAP> SearchResults(2);
 
 	if (((id = JabberGetPacketID(iqNode)) == -1) || ((type = XmlGetAttr(iqNode, "type")) == nullptr)) {
 		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
@@ -312,22 +312,21 @@ void CJabberProto::OnIqResultAdvancedSearch(const TiXmlElement *iqNode, CJabberI
 		if (xNode) {
 			// 1. Form search results info
 			for (auto *fieldNode : TiXmlFilter(XmlFirstChild(xNode, "reported"), "field")) {
-				const char *var = XmlGetAttr(fieldNode, "var");
+				auto *var = XmlGetAttr(fieldNode, "var");
 				if (var) {
-					Utf2T wszVar(var), wszLabel(XmlGetAttr(fieldNode, "label"));
-					mColumnsNames.insert(wszVar, (wszLabel != nullptr) ? wszLabel: wszVar);
+					auto *label = XmlGetAttr(fieldNode, "label");
+					mColumnsNames.insert(var, (label != nullptr) ? label : var);
 				}
 			}
 
 			for (auto *itemNode : TiXmlFilter(xNode, "item")) {
-				U_TCHAR_MAP *pUserColumn = new U_TCHAR_MAP(10);
+				UNIQUE_MAP *pUserColumn = new UNIQUE_MAP(10);
 				for (auto *fieldNode : TiXmlFilter(itemNode, "field")) {
-					if (const char* var = XmlGetAttr(fieldNode, "var")) {
+					if (auto *var = XmlGetAttr(fieldNode, "var")) {
 						if (auto *textNode = XmlFirstChild(fieldNode, "value")) {
-							Utf2T wszVar(var), wszText(textNode->GetText());
-							if (!mColumnsNames[wszVar.get()])
-								mColumnsNames.insert(wszVar, wszVar);
-							pUserColumn->insert(wszVar, wszText);
+							if (!mColumnsNames[var])
+								mColumnsNames.insert(var, var);
+							pUserColumn->insert(var, textNode->GetText());
 						}
 					}
 				}
@@ -338,28 +337,27 @@ void CJabberProto::OnIqResultAdvancedSearch(const TiXmlElement *iqNode, CJabberI
 		else {
 			// 2. Field list search results info
 			for (auto *itemNode : TiXmlFilter(queryNode, "item")) {
-				U_TCHAR_MAP *pUserColumn = new U_TCHAR_MAP(10);
+				UNIQUE_MAP *pUserColumn = new UNIQUE_MAP(10);
 
-				Utf2T jid(XmlGetAttr(itemNode, "jid"));
-				wchar_t *keyReturned;
-				mColumnsNames.insertCopyKey(L"jid", L"jid", &keyReturned, CopyKey, DestroyKey);
-				mColumnsNames.insert(L"jid", keyReturned);
-				pUserColumn->insertCopyKey(L"jid", jid, nullptr, CopyKey, DestroyKey);
+				auto *jid = XmlGetAttr(itemNode, "jid");
+				char *keyReturned;
+				mColumnsNames.insertCopyKey("jid", "jid", &keyReturned);
+				mColumnsNames.insert("jid", keyReturned);
+				pUserColumn->insertCopyKey("jid", jid, nullptr);
 
 				for (auto *child : TiXmlEnum(itemNode)) {
 					const char *szColumnName = child->Name();
 					if (szColumnName) {
 						const char *pszChild = child->GetText();
 						if (pszChild && *pszChild) {
-							Utf2T wszVar(szColumnName), wszText(pszChild);
-							mColumnsNames.insertCopyKey(wszVar, L"", &keyReturned, CopyKey, DestroyKey);
-							mColumnsNames.insert(wszVar, keyReturned);
-							pUserColumn->insertCopyKey(wszVar, wszText, nullptr, CopyKey, DestroyKey);
+							mColumnsNames.insertCopyKey(szColumnName, "", &keyReturned);
+							mColumnsNames.insert(szColumnName, keyReturned);
+							pUserColumn->insertCopyKey(szColumnName, pszChild, nullptr);
 						}
 					}
 				}
 
-				SearchResults.insert((void*)pUserColumn);
+				SearchResults.insert(pUserColumn);
 			}
 		}
 	}
@@ -383,10 +381,10 @@ void CJabberProto::OnIqResultAdvancedSearch(const TiXmlElement *iqNode, CJabberI
 		return;
 	}
 
-	SearchReturnResults((HANDLE)id, (void*)&SearchResults, (U_TCHAR_MAP *)&mColumnsNames);
+	SearchReturnResults(this, (HANDLE)id, SearchResults, mColumnsNames);
 
 	for (auto &it : SearchResults)
-		delete ((U_TCHAR_MAP*)it);
+		delete ((UNIQUE_MAP*)it);
 
 	//send success to finish searching
 	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
