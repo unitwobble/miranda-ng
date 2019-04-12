@@ -382,7 +382,7 @@ extern "C" {
 			wchar_t* tmp = mir_utf8decodeW(message);
 			mir_snwprintf(msg, _countof(msg), TranslateT("The following message received from '%s' was NOT encrypted:\n\n%s"), contact, tmp);
 			mir_free(tmp);
-			ProtoChainSend(hContact, PSS_MESSAGE, PREF_BYPASS_OTR, (LPARAM)message);
+			//ProtoChainSend(hContact, PSS_MESSAGE, PREF_BYPASS_OTR, (LPARAM)message);
 			break; }
 		case OTRL_MSGEVENT_RCVDMSG_FOR_OTHER_INSTANCE:
 			//			title = TranslateT("Received message for a different session");
